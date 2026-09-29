@@ -1,0 +1,52 @@
+name: Sync Fork With Upstream
+
+on:
+  schedule:
+    # Chạy mỗi ngày lúc 02:00 giờ Việt Nam = 19:00 UTC
+    - cron: "0 19 * * *"
+
+  # Cho phép chạy thủ công từ GitHub Actions
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream
+        run: |
+          git remote add upstream https://github.com/plastic-labs/honcho.git
+
+      - name: Fetch upstream
+        run: |
+          git fetch upstream main
+
+      - name: Sync main
+        run: |
+          git checkout -B main origin/main
+          if git merge-base --is-ancestor upstream/main main; then
+            echo "Fork is already up to date with upstream/main."
+            exit 0
+          fi
+
+          echo "Upstream has changes. Syncing main with upstream..."
+          cp .github/workflows/sync-upstream.yml /tmp/sync-upstream.yml
+          git reset --hard upstream/main
+          mkdir -p .github/workflows
+          cp /tmp/sync-upstream.yml .github/workflows/sync-upstream.yml
+          git add .github/workflows/sync-upstream.yml
+          git commit -m "ci: sync upstream ($(git rev-parse --short upstream/main)) [skip ci]"
+          git push origin main --force-with-lease
